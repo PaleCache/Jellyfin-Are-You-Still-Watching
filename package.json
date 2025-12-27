@@ -1,0 +1,16 @@
+{
+  "name": "jellyfin-areyoustillwatching",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "PaleCache",
+  "type": "module",
+  "main": "index.js",
+  
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
