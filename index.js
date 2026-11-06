@@ -3,7 +3,7 @@
 
 import fetch from "node-fetch";
 
-const API_KEY = "9eca0b4b1e824efdbff98dd145f37a74".trim(); // ENTER API KEY HERE!
+const API_KEY = "YOUR API KEY HERE".trim(); // ENTER API KEY HERE!
 const SERVER_URL = "http://127.0.0.1:8096"; // ENTER SERVER DOMAIN HERE!
 const POLL_INTERVAL = 3500;
 const MAX_PLAYBACK_MINUTES = 240; // TIMEOUT IN MINUTES
