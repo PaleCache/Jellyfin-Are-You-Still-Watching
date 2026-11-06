@@ -1,9 +1,9 @@
-// SCUFFED ARE YOU STILL WATCHING v0.0.6
+// SCUFFED ARE YOU STILL WATCHING v0.0.7
 // MADE WITH ❤️ BY: PALECACHE
 
 import fetch from "node-fetch";
 
-const API_KEY = ""; // ENTER API KEY HERE!
+const API_KEY = "9eca0b4b1e824efdbff98dd145f37a74".trim(); // ENTER API KEY HERE!
 const SERVER_URL = "http://127.0.0.1:8096"; // ENTER SERVER DOMAIN HERE!
 const POLL_INTERVAL = 3500;
 const MAX_PLAYBACK_MINUTES = 240; // TIMEOUT IN MINUTES
@@ -13,16 +13,36 @@ const activeSessions = {}; // key: userName + showId
 const ActiveHoursStart = 18; // 6:00pm
 const ActiveHoursEnd = 7;   // 7:00am
 
+const AUTH_HEADERS = {
+  Authorization: `MediaBrowser Token="${API_KEY}"`,
+};
+
+function getTimestamp() {
+  return new Date().toLocaleString("en-US", {
+    dateStyle: "short",
+    timeStyle: "medium",
+    hour12: true,
+  });
+}
+
 async function checkPlayback() {
   try {
-    const timestamp = new Date().toLocaleString("en-US", {
-      dateStyle: "short",
-      timeStyle: "medium",
-      hour12: true
-    });
-    const URL = `${SERVER_URL}/Sessions?api_key=${API_KEY}`;
-    const res = await fetch(URL);
+    const timestamp = getTimestamp();
+
+    const res = await fetch(`${SERVER_URL}/Sessions`, { headers: AUTH_HEADERS });
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[${timestamp}] Sessions request failed: ${res.status} ${res.statusText} ${body}`);
+      return;
+    }
+
     const text = await res.text();
+    if (!text) {
+      console.error(`[${timestamp}] Empty response (status ${res.status}), skipping poll.`);
+      return;
+    }
+
     let sessions = [];
     try {
       sessions = JSON.parse(text);
@@ -30,24 +50,15 @@ async function checkPlayback() {
       console.error("Failed to parse JSON, skipping this poll.", err);
       return;
     }
-        
+
     const now = new Date();
     const nowMs = now.getTime();
     const currentHour = now.getHours();
-    const isActiveHours = (currentHour >= ActiveHoursStart || currentHour < ActiveHoursEnd);
+    const isActiveHours = currentHour >= ActiveHoursStart || currentHour < ActiveHoursEnd;
     const currentKeys = new Set();
-    const today = new Date(now);
-    today.setHours(ActiveHoursStart, 0, 0, 0);
-    let activeStartTime = today.getTime();
-    if (currentHour < ActiveHoursEnd) {
-      today.setDate(today.getDate() - 1);
-      today.setHours(ActiveHoursStart, 0, 0, 0);
-      activeStartTime = today.getTime();
-    }
 
     for (const session of sessions) {
       if (!session.NowPlayingItem) continue;
-
       const userName = session.UserName || "Unknown";
       const nowPlaying = session.NowPlayingItem;
       let showId, showName;
@@ -72,6 +83,8 @@ async function checkPlayback() {
         }
       } else {
         const active = activeSessions[sessionKey];
+
+       
         if (active.pendingRemoval) {
           delete active.pendingRemoval;
         }
@@ -81,19 +94,24 @@ async function checkPlayback() {
           active.startTime = null;
         }
 
+        
         if (active.startTime === null && isActiveHours) {
           active.startTime = nowMs;
-          console.log(`[${timestamp}] ${userName} is now within active hours. Timer started at ${timestamp} for ${showName}`);
+          console.log(`[${timestamp}] ${userName} is now within active hours. Timer started for ${showName}`);
         }
 
         if (active.startTime) {
           const elapsedMinutes = (nowMs - active.startTime) / 1000 / 60;
           if (elapsedMinutes >= MAX_PLAYBACK_MINUTES) {
-            if (isActiveHours && !session.PlayState.IsPaused) {
+            const isPaused = session.PlayState?.IsPaused ?? false;
+            if (isActiveHours && !isPaused) {
               console.log(`[${timestamp}] ${userName} has been watching "${showName}" > ${MAX_PLAYBACK_MINUTES} minutes. Pausing.`);
               await pausePlayback(session.Id);
-              await sendMessage(session.Id, `Hey ${userName} 👋, Are You Still Watching? If So, Please Accept This Message And Unpause The Video 😝`);
-              active.startTime = nowMs;
+              await sendMessage(
+                session.Id,
+                `Hey ${userName} 👋, Are You Still Watching? If So, Please Accept This Message And Unpause The Video 😝`
+              );
+              active.startTime = nowMs; 
             }
           }
         }
@@ -112,7 +130,6 @@ async function checkPlayback() {
         }
       }
     }
-
   } catch (err) {
     console.error("Error fetching sessions:", err);
   }
@@ -120,17 +137,13 @@ async function checkPlayback() {
 
 async function pausePlayback(sessionId) {
   try {
-    const timestamp = new Date().toLocaleString("en-US", {
-      dateStyle: "short",
-      timeStyle: "medium",
-      hour12: true
-    });
-    const url = `${SERVER_URL}/Sessions/${sessionId}/Playing/Pause?api_key=${API_KEY}`;
+    const timestamp = getTimestamp();
+    const url = `${SERVER_URL}/Sessions/${sessionId}/Playing/Pause`;
     console.log(`[${timestamp}] [DEBUG] Attempting to pause session ${sessionId}`);
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" }
+      headers: { ...AUTH_HEADERS, "Content-Type": "application/json" },
     });
 
     if (response.ok) {
@@ -146,20 +159,16 @@ async function pausePlayback(sessionId) {
 
 async function sendMessage(sessionId, message) {
   try {
-    const timestamp = new Date().toLocaleString("en-US", {
-      dateStyle: "short",
-      timeStyle: "medium",
-      hour12: true
-    });
-    const url = `${SERVER_URL}/Sessions/${sessionId}/Message?api_key=${API_KEY}`;
-    
+    const timestamp = getTimestamp();
+    const url = `${SERVER_URL}/Sessions/${sessionId}/Message`;
+
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...AUTH_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({
         Text: message,
-        Type: "Info"
-      })
+        Type: "Info",
+      }),
     });
 
     if (response.ok) {
